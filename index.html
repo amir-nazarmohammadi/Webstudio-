@@ -27,11 +27,17 @@ body{font-family:'Vazirmatn',sans-serif;background:var(--bg);color:#fff;min-heig
 .btn-title{font-size:16px;font-weight:700}
 .btn-sub{font-size:11px;color:rgba(255,255,255,0.45);margin-top:4px;letter-spacing:1px}
 .spinner{display:inline-block;width:20px;height:20px;border:2px solid rgba(255,255,255,0.2);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite;vertical-align:middle;margin-left:8px}
-.stats{display:none;grid-template-columns:repeat(4,1fr);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:12px 0;margin-bottom:16px}
+.stats{display:none;grid-template-columns:repeat(4,1fr);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:12px 0;margin-bottom:12px}
 .si{text-align:center}
 .si+.si{border-right:1px solid rgba(255,255,255,0.07)}
 .sn{font-size:20px;font-weight:700;color:var(--blue)}
 .sl{font-size:9px;color:rgba(255,255,255,0.3);margin-top:2px;letter-spacing:1px}
+
+/* دکمه کپی همه */
+.copy-all-btn{width:100%;background:linear-gradient(135deg,rgba(249,115,22,0.15),rgba(249,115,22,0.05));border:1px solid rgba(249,115,22,0.35);border-radius:14px;padding:13px;color:var(--orange);font-family:'Vazirmatn',sans-serif;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:14px;display:none;-webkit-tap-highlight-color:transparent;transition:all .2s}
+.copy-all-btn:active{transform:scale(0.97)}
+.copy-all-btn.ok{background:linear-gradient(135deg,rgba(34,197,94,0.2),rgba(34,197,94,0.05));border-color:var(--green);color:var(--green)}
+
 .empty{text-align:center;padding:40px 0;opacity:.45}
 .empty-icon{font-size:48px;margin-bottom:12px}
 .empty-text{font-size:14px;color:rgba(255,255,255,0.5);line-height:1.8}
@@ -87,6 +93,9 @@ body{font-family:'Vazirmatn',sans-serif;background:var(--bg);color:#fff;min-heig
     <div class="si"><div class="sn" id="s3" style="color:#22c55e">0</div><div class="sl">Other</div></div>
   </div>
 
+  <!-- دکمه کپی همه -->
+  <button class="copy-all-btn" id="copyAllBtn" onclick="copyAll()">📋  کپی همه کانفیگ‌ها</button>
+
   <div class="empty" id="empty">
     <div class="empty-icon">🛡️</div>
     <div class="empty-text">برای دریافت کانفیگ رایگان<br>دکمه بالا را لمس کنید</div>
@@ -102,31 +111,48 @@ body{font-family:'Vazirmatn',sans-serif;background:var(--bg);color:#fff;min-heig
     </div>
   </a>
 </div>
-<div class="toast" id="toast">✓ کانفیگ کپی شد!</div>
+<div class="toast" id="toast">✓ کپی شد!</div>
 
 <script>
 const TAG = '@amir_webstudio';
-
-// چند proxy مختلف - اگه یکی کار نکرد بعدی امتحان میشه
 const PROXIES = [
-  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-  url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-  url => `https://thingproxy.freeboard.io/fetch/${url}`,
-  url => `https://cors.eu.org/${url}`,
+  u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+  u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+  u => `https://thingproxy.freeboard.io/fetch/${u}`,
+  u => `https://cors.eu.org/${u}`,
 ];
-
 const TARGET = 'https://t.me/s/FreeAutoConfig';
 
-function rename(raw) {
-  raw = raw.replace(/(vless:\/\/[^#\s<"]+)(#[^\s<"]*)?/g, '$1#' + TAG);
-  raw = raw.replace(/(trojan:\/\/[^#\s<"]+)(#[^\s<"]*)?/g, '$1#' + TAG);
-  raw = raw.replace(/(ss:\/\/[^#\s<"]+)(#[^\s<"]*)?/g, '$1#' + TAG);
-  raw = raw.replace(/(vmess:\/\/)([A-Za-z0-9+\/=]+)/g, (m, p, b64) => {
-    try { const o=JSON.parse(atob(b64)); o.ps=TAG; return p+btoa(JSON.stringify(o)); }
-    catch { return m; }
+// تمام کانفیگ‌ها ذخیره میشه اینجا
+let allConfigs = [];
+
+function renameVmess(raw) {
+  // فقط فیلد ps رو عوض میکنیم - بقیه رو دست نمیزنیم
+  return raw.replace(/(vmess:\/\/)([A-Za-z0-9+\/=\-_]+)/g, (m, prefix, b64) => {
+    try {
+      // padding درست کن
+      const pad = b64.length % 4;
+      const padded = pad ? b64 + '='.repeat(4 - pad) : b64;
+      const decoded = atob(padded);
+      const obj = JSON.parse(decoded);
+      obj.ps = TAG;
+      const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(obj))));
+      return prefix + encoded;
+    } catch(e) {
+      // اگه خطا داد، دست نزن
+      return m;
+    }
   });
-  return raw;
+}
+
+function rename(raw) {
+  // vless, trojan, ss - فقط # اسم عوض میشه
+  raw = raw.replace(/(vless:\/\/[^#\s<"]+)(#[^\s<"]*)?(\s|$)/g, (m,u,h,e) => u+'#'+TAG+e);
+  raw = raw.replace(/(trojan:\/\/[^#\s<"]+)(#[^\s<"]*)?(\s|$)/g, (m,u,h,e) => u+'#'+TAG+e);
+  raw = raw.replace(/(ss:\/\/[^#\s<"]+)(#[^\s<"]*)?(\s|$)/g, (m,u,h,e) => u+'#'+TAG+e);
+  raw = renameVmess(raw);
+  return raw.trim();
 }
 
 function proto(c) {
@@ -137,89 +163,122 @@ function proto(c) {
   return {l:'Config',c:'#888'};
 }
 
-function toast() {
-  const t=document.getElementById('toast');
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg || '✓ کپی شد!';
   t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'),2000);
+  setTimeout(() => t.classList.remove('show'), 2000);
 }
 
-function copy(btn, cfg) {
-  const txt = decodeURIComponent(cfg);
-  navigator.clipboard.writeText(txt).catch(()=>{
-    const ta=document.createElement('textarea');
-    ta.value=txt; document.body.appendChild(ta);
-    ta.select(); document.execCommand('copy');
+function copyText(text) {
+  return navigator.clipboard.writeText(text).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    document.execCommand('copy');
     document.body.removeChild(ta);
   });
-  btn.classList.add('ok'); btn.textContent='✓  کپی شد!'; toast();
-  setTimeout(()=>{ btn.classList.remove('ok'); btn.textContent='⎘  کپی کانفیگ'; },2000);
+}
+
+function copyOne(btn, idx) {
+  copyText(allConfigs[idx]);
+  btn.classList.add('ok');
+  btn.textContent = '✓  کپی شد!';
+  showToast('✓ کانفیگ کپی شد!');
+  setTimeout(() => {
+    btn.classList.remove('ok');
+    btn.textContent = '⎘  کپی کانفیگ';
+  }, 2000);
+}
+
+function copyAll() {
+  const text = allConfigs.join('\n');
+  copyText(text);
+  const btn = document.getElementById('copyAllBtn');
+  btn.classList.add('ok');
+  btn.textContent = '✓  همه کپی شد!';
+  showToast('✓ همه ' + allConfigs.length + ' کانفیگ کپی شد!');
+  setTimeout(() => {
+    btn.classList.remove('ok');
+    btn.textContent = '📋  کپی همه کانفیگ‌ها';
+  }, 3000);
 }
 
 async function tryFetch(proxyFn) {
-  const res = await fetch(proxyFn(TARGET), {signal: AbortSignal.timeout(8000)});
-  if(!res.ok) throw new Error('bad status');
+  const res = await fetch(proxyFn(TARGET), {signal: AbortSignal.timeout(10000)});
+  if(!res.ok) throw new Error('bad');
   const html = await res.text();
-  const pat = /(vmess|vless|trojan|ss):\/\/[^\s<"'\n]+/g;
-  const matches = [...html.matchAll(pat)].map(m=>m[0]);
+  // پیدا کردن همه کانفیگ‌ها
+  const pat = /(vmess|vless|trojan|ss):\/\/[^\s<>"'\n\r]+/g;
+  const matches = [...html.matchAll(pat)].map(m => m[0].trim());
   return [...new Set(matches)];
 }
 
 async function fetchConfigs() {
-  const btn=document.getElementById('btn');
-  const errEl=document.getElementById('err');
-  btn.innerHTML='<span class="spinner"></span><div class="btn-title" style="margin-top:8px">در حال دریافت...</div>';
-  btn.style.animation='none'; btn.disabled=true;
-  document.getElementById('empty').style.display='none';
-  document.getElementById('list').innerHTML='';
-  document.getElementById('stats').style.display='none';
-  errEl.style.display='none';
+  const btn = document.getElementById('btn');
+  const errEl = document.getElementById('err');
+  
+  btn.innerHTML = '<span class="spinner"></span><div class="btn-title" style="margin-top:8px">در حال دریافت...</div>';
+  btn.style.animation = 'none';
+  btn.disabled = true;
+  
+  document.getElementById('empty').style.display = 'none';
+  document.getElementById('list').innerHTML = '';
+  document.getElementById('stats').style.display = 'none';
+  document.getElementById('copyAllBtn').style.display = 'none';
+  errEl.style.display = 'none';
+  allConfigs = [];
 
   let configs = [];
-  let lastErr = '';
 
-  for(let i=0; i<PROXIES.length; i++) {
+  for(let i = 0; i < PROXIES.length; i++) {
     try {
       configs = await tryFetch(PROXIES[i]);
       if(configs.length > 0) break;
-    } catch(e) {
-      lastErr = e.message;
-    }
+    } catch(e) {}
   }
 
   if(configs.length === 0) {
     errEl.innerHTML = '⚠️ اتصال به کانال ممکن نشد.<br>مطمئن شو VPN روشنه و دوباره امتحان کن.';
-    errEl.style.display='block';
-    document.getElementById('empty').style.display='block';
+    errEl.style.display = 'block';
+    document.getElementById('empty').style.display = 'block';
   } else {
-    const final = configs.slice(0,50).map(rename);
-    const vm=final.filter(c=>c.startsWith('vmess')).length;
-    const vl=final.filter(c=>c.startsWith('vless')).length;
-    document.getElementById('s0').textContent=final.length;
-    document.getElementById('s1').textContent=vm;
-    document.getElementById('s2').textContent=vl;
-    document.getElementById('s3').textContent=final.length-vm-vl;
-    document.getElementById('stats').style.display='grid';
+    // بیشتر از ۵۰ تا برداریم چون بعضی تکراری هستن
+    allConfigs = configs.slice(0, 50).map(rename);
 
-    const list=document.getElementById('list');
-    final.forEach((cfg,i)=>{
-      const p=proto(cfg);
-      const d=document.createElement('div');
-      d.className='card';
-      d.style.animationDelay=(i*0.03)+'s';
-      const safe=encodeURIComponent(cfg);
-      d.innerHTML=`
+    const vm = allConfigs.filter(c => c.startsWith('vmess')).length;
+    const vl = allConfigs.filter(c => c.startsWith('vless')).length;
+    document.getElementById('s0').textContent = allConfigs.length;
+    document.getElementById('s1').textContent = vm;
+    document.getElementById('s2').textContent = vl;
+    document.getElementById('s3').textContent = allConfigs.length - vm - vl;
+    document.getElementById('stats').style.display = 'grid';
+    document.getElementById('copyAllBtn').style.display = 'block';
+
+    const list = document.getElementById('list');
+    allConfigs.forEach((cfg, i) => {
+      const p = proto(cfg);
+      const d = document.createElement('div');
+      d.className = 'card';
+      d.style.animationDelay = (i * 0.03) + 's';
+      d.innerHTML = `
         <div class="ct">
           <span class="pb" style="color:${p.c};border-color:${p.c}">${p.l}</span>
           <span class="cn">#${i+1}</span>
         </div>
         <div class="cfg">${cfg}</div>
-        <button class="cpb" onclick="copy(this,'${safe}')">⎘  کپی کانفیگ</button>`;
+        <button class="cpb" data-idx="${i}" onclick="copyOne(this,${i})">⎘  کپی کانفیگ</button>`;
       list.appendChild(d);
     });
   }
 
-  btn.innerHTML='<div class="btn-icon">⚡</div><div class="btn-title">دریافت کانفیگ اضطراری</div><div class="btn-sub">۵۰ کانفیگ از کانال رسمی</div>';
-  btn.style.animation=''; btn.disabled=false;
+  btn.innerHTML = '<div class="btn-icon">⚡</div><div class="btn-title">دریافت کانفیگ اضطراری</div><div class="btn-sub">۵۰ کانفیگ از کانال رسمی</div>';
+  btn.style.animation = '';
+  btn.disabled = false;
 }
 </script>
 </body>
